@@ -1,0 +1,166 @@
+import { Button, VerticalBox, HorizontalBox, ComboBox, CheckBox } from "std-widgets.slint";
+
+
+component KeyButton /*inherits Button*/ {
+    in-out property <int> index;
+
+    in property <bool> enabled;
+    in property <bool> selected;
+    in property <string> text;
+    callback clicked;
+    in property <brush> background: white;
+
+    max-width: 68px;
+    max-height: 60px;
+    min-width: 68px;
+    min-height: 60px; 
+
+    Rectangle {
+
+        states [
+            selected when root.enabled && root.selected && !ta.pressed && !ta.has-hover: {
+                background: Colors.steelblue;
+                in {
+                    animate background { duration: 100ms; }
+                }
+            }
+            enabled when root.enabled && !ta.pressed && !ta.has-hover : {
+                background: Colors.grey;
+                in {
+                    animate background { duration: 100ms; }
+                }
+            }
+            disabled when !root.enabled : {
+                background: Colors.lightgray;
+                out {
+                    animate background { duration: 100ms; }
+                }
+            }
+            down when root.enabled && ta.pressed : {
+                background: Colors.lightsteelblue;
+                in {
+                    animate background { duration: 100ms; }
+                }
+            }
+            hover when root.enabled && ta.has-hover : {
+                background: background.brighter(20%);
+                in {
+                    animate background { duration: 100ms; }
+                }
+            }
+        ]
+
+        border-radius: 4px;
+        border-width: 2px;
+        border-color: self.background.darker(20%);
+        ta := TouchArea {
+            clicked => { if(enabled) { root.clicked() }  }
+        }
+    }
+    rotulo := Text { text: root.text; }
+    
+}
+
+component KeyGrid inherits VerticalBox {
+    in property <int> columns;
+    in property <int> rows;
+    in property <bool> enabled;
+    out property <int> selectedIdx: -1;
+
+    callback keyClick(int);
+
+
+    for idxR in rows: HorizontalBox {
+        for idxC in columns: KeyButton {
+            text: "Key " + ((idxC + 1) + (idxR * columns)); 
+            index: ((idxC + 1) + (idxR * columns)) - 1;
+            selected: selectedIdx == self.index;
+
+            clicked => {
+                selectedIdx = self.index;
+                keyClick(self.index);
+            }
+
+            enabled: root.enabled;
+        }    
+    }
+}
+
+
+export component AppWindow inherits Window {
+
+    preferred-width: 400px;
+    preferred-height: 400px;
+    title: "Config Macro Keyboard";
+
+    in property <bool> connected: false;
+    in property list_devices <=> cmbDevices.model;
+    in property list_keys <=> cmbKey.model;
+    in-out property selected_key <=> cmbKey.current-index;
+    in-out property selected_value <=> cmbKey.current-value;
+
+    in property <bool> is_ctrl <=> chkCtrl.checked;
+    in property <bool> is_shift <=> chkShift.checked;
+    in property <bool> is_alt <=> chkAlt.checked;
+
+
+    callback write-key-config(int, bool, bool, bool, string);
+    callback read-key-config(int);
+    callback connect(int);
+    callback disconnect();
+
+    VerticalBox {
+        HorizontalBox {
+            cmbDevices := ComboBox {
+                model: [];
+                enabled: !root.connected;
+            }
+            Button {
+                text: "Connect";
+                enabled: !root.connected;
+                clicked => {
+                    connect(cmbDevices.current-index);
+                }
+            }
+        }
+
+        teclado := KeyGrid {
+            rows: 3;
+            columns: 6;
+            enabled: root.connected;
+            keyClick(i) => {
+                read-key-config(i);
+            }
+        }
+
+
+        Text {
+            text: "Selected: Key: \{(teclado.selectedIdx > -1)?(teclado.selectedIdx + 1):""}";
+        }
+        HorizontalBox {
+            chkCtrl := CheckBox {
+                text: "Control";
+                enabled: root.connected && teclado.selectedIdx > -1;
+            }
+            chkShift := CheckBox {
+                text: "Shift";
+                enabled: root.connected && teclado.selectedIdx > -1;
+            }
+            chkAlt := CheckBox {
+                text: "Alt";
+                enabled: root.connected && teclado.selectedIdx > -1;
+            }
+            cmbKey := ComboBox {
+                model: ["", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "a", "b", "c", "d", "e", "f","g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"];
+                enabled: root.connected && teclado.selectedIdx > -1;
+            }
+        }
+        Button {
+            text: "Write";
+            enabled: root.connected && teclado.selectedIdx > -1;
+            clicked => {
+                root.write-key-config(teclado.selectedIdx, chkCtrl.checked, chkShift.checked, chkAlt.checked, cmbKey.current-value);
+            }
+        }
+    }
+}
